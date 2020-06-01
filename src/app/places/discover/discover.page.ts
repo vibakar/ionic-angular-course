@@ -3,7 +3,8 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { PlacesService } from '../places.service';
 import { Place } from '../place.model';
 import { Subscription } from 'rxjs';
-import { AuthService } from 'src/app/auth/auth.service';
+import { AuthService } from '../../auth/auth.service';
+import { take, tap } from 'rxjs/operators';
 
 @Component({
   selector: 'app-discover',
@@ -34,13 +35,15 @@ export class DiscoverPage implements OnInit, OnDestroy {
   }
 
   onFilterChange(event: CustomEvent) {
-    if (event.detail.value === 'allPlaces') {
-      this.relevantPlaces = this.loadedPlaces;
-      this.listLoadedPlaces = this.relevantPlaces.slice(1);
-    } else {
-      this.relevantPlaces = this.loadedPlaces.filter(p => p.userId !== this.authService.userId);
-      this.listLoadedPlaces = this.relevantPlaces.slice(1);
-    }
+    this.authService.userId.pipe(take(1)).subscribe(userId => {
+      if (event.detail.value === 'allPlaces') {
+        this.relevantPlaces = this.loadedPlaces;
+        this.listLoadedPlaces = this.relevantPlaces.slice(1);
+      } else {
+        this.relevantPlaces = this.loadedPlaces.filter(p => p.userId !== userId);
+        this.listLoadedPlaces = this.relevantPlaces.slice(1);
+      }
+    });
   }
 
   ngOnDestroy() {

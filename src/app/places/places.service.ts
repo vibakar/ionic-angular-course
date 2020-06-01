@@ -30,60 +30,76 @@ export class PlacesService {
   }
 
   getPlaces() {
-    return this.http.get<{ [key: string]: PlaceData }>(this.endpoint + '/offered-places.json')
-      .pipe(map(resData => {
-        let places = [];
-        for (let key in resData) {
-          if (resData.hasOwnProperty) {
-            places.push(
-              new Place(key,
-                resData[key].title,
-                resData[key].description,
-                resData[key].imageUrl,
-                resData[key].price,
-                new Date(resData[key].availableFrom),
-                new Date(resData[key].availableTo),
-                resData[key].userId)
-            );
-          }
+    return this.authService.token.pipe(take(1), switchMap(token => {
+      return this.http.get<{ [key: string]: PlaceData }>(`${this.endpoint}/offered-places.json?auth=${token}`)
+    }), map(resData => {
+      let places = [];
+      for (let key in resData) {
+        if (resData.hasOwnProperty) {
+          places.push(
+            new Place(key,
+              resData[key].title,
+              resData[key].description,
+              resData[key].imageUrl,
+              resData[key].price,
+              new Date(resData[key].availableFrom),
+              new Date(resData[key].availableTo),
+              resData[key].userId)
+          );
         }
-        return places;
-      }), tap(places => {
-        this._places.next(places);
-      }));
+      }
+      return places;
+    }), tap(places => {
+      this._places.next(places);
+    }));
   }
 
   getPlace(id: string) {
-    return this.http.get<PlaceData>(`${this.endpoint}/offered-places/${id}.json`).pipe(map((place) => {
+    return this.authService.token.pipe(take(1), switchMap(token => {
+      return this.http.get<PlaceData>(`${this.endpoint}/offered-places/${id}.json?auth=${token}`)
+    }), map((place) => {
       return new Place(id, place.title, place.description, place.imageUrl, place.price, new Date(place.availableFrom), new Date(place.availableTo), place.userId);
     }));
   }
 
   addPlaces(title: string, description: string, price: number, dateFrom: Date, dateTo: Date) {
     let generatedId: string;
-    let newPlace = new Place(
-      Math.random().toString(),
-      title,
-      description,
-      'https://www.planetware.com/wpimages/2019/11/india-best-places-to-visit-agra.jpg',
-      price,
-      dateFrom,
-      dateTo,
-      this.authService.userId
-    );
-    return this.http.post<{ name: string }>(this.endpoint + '/offered-places.json', { ...newPlace, id: null })
-      .pipe(switchMap(resData => {
-        generatedId = resData.name;
-        return this.places;
-      }), take(1), tap(places => {
-        newPlace.id = generatedId;
-        this._places.next(places.concat(newPlace));
-      }));
+    let newPlace: Place;
+    let fetchedUserId: string;
+    return this.authService.userId.pipe(take(1), switchMap(userId => {
+      if (!userId) {
+        throw new Error('No user found');
+      }
+      fetchedUserId = userId;
+      return this.authService.token;
+    }), take(1), switchMap(token => {
+      newPlace = new Place(
+        Math.random().toString(),
+        title,
+        description,
+        'https://www.planetware.com/wpimages/2019/11/india-best-places-to-visit-agra.jpg',
+        price,
+        dateFrom,
+        dateTo,
+        fetchedUserId
+      );
+      return this.http.post<{ name: string }>(`${this.endpoint}/offered-places.json?auth=${token}`, { ...newPlace, id: null });
+    }), switchMap(resData => {
+      generatedId = resData.name;
+      return this.places;
+    }), take(1), tap(places => {
+      newPlace.id = generatedId;
+      this._places.next(places.concat(newPlace));
+    }));
   }
 
   updatePlace(placeId: string, title: string, description: string) {
     let updatedPlaces: Place[] = [];
-    return this.places.pipe(take(1), switchMap((places) => {
+    let fetchedToken: string;
+    return this.authService.token.pipe(take(1), switchMap(token => {
+      fetchedToken = token;
+      return this.places;
+    }), take(1), switchMap((places) => {
       if (places.length == 0) {
         return this.getPlaces();
       } else {
@@ -94,7 +110,7 @@ export class PlacesService {
       let oldPlace = places[placeIndex];
       updatedPlaces = [...places];
       updatedPlaces[placeIndex] = new Place(placeId, title, description, oldPlace.imageUrl, oldPlace.price, oldPlace.availableFrom, oldPlace.availableTo, oldPlace.userId);
-      return this.http.put(`${this.endpoint}/offered-places/${placeId}.json`, { ...updatedPlaces[placeIndex] });
+      return this.http.put(`${this.endpoint}/offered-places/${placeId}.json?auth=${fetchedToken}`, { ...updatedPlaces[placeIndex] });
     }), tap(() => {
       this._places.next(updatedPlaces);
     }));

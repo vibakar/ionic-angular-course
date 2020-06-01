@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { AuthService } from './auth.service';
 import { Router } from '@angular/router';
-import { LoadingController } from '@ionic/angular';
+import { LoadingController, AlertController } from '@ionic/angular';
 import { NgForm } from '@angular/forms';
 
 @Component({
@@ -12,42 +12,71 @@ import { NgForm } from '@angular/forms';
 export class AuthPage implements OnInit {
   isLoading = false;
   isLogin = true;
-  constructor(private authService: AuthService, private router: Router, private loadingCtrl: LoadingController) { }
+  constructor(
+    private authService: AuthService,
+    private router: Router,
+    private loadingCtrl: LoadingController,
+    private alertCtrl: AlertController) { }
 
   ngOnInit() {
   }
 
-  onClickLogin() {
+  authenticate(email: string, password: string, form: NgForm) {
     this.isLoading = true;
-    this.authService.login();
     this.loadingCtrl
-      .create({keyboardClose: true, message: 'Logging in...'})
+      .create({ keyboardClose: true, message: 'Logging in...' })
       .then(loadingEl => {
         loadingEl.present();
-        setTimeout(() => {
-          loadingEl.dismiss();
-          this.router.navigateByUrl('/places/tabs/discover');
-        }, 1500);
+        if (this.isLogin) {
+          this.authService.login(email, password).subscribe(response => {
+            loadingEl.dismiss();
+            this.router.navigateByUrl('/places/tabs/discover');
+            form.reset();
+          }, error => {
+            loadingEl.dismiss();
+            const code = error.error.error.message;
+            let message = 'Could not login you, please try again';
+            if (code == 'EMAIL_NOT_FOUND') {
+              message = 'Email address does not exists';
+            }
+            this.showAlert(message);
+          });
+        } else {
+          this.authService.signup(email, password).subscribe(response => {
+            loadingEl.dismiss();
+            this.router.navigateByUrl('/places/tabs/discover');
+            form.reset();
+          }, error => {
+            loadingEl.dismiss();
+            const code = error.error.error.message;
+            let message = 'Could not sign you up, please try again';
+            if (code == 'EMAIL_EXISTS') {
+              message = 'Email address already exists';
+            }
+            this.showAlert(message);
+          });
+        }
       })
   }
 
   onSubmit(form: NgForm) {
-    if(form.invalid) {
+    if (form.invalid) {
       return;
     } else {
       const email = form.value.email;
       const password = form.value.password;
-      console.log(email, password);
-      
-      if(this.isLogin) {
-
-      } else {
-
-      }
+      this.authenticate(email, password, form);
     }
   }
 
   switchForm() {
     this.isLogin = !this.isLogin;
+  }
+
+  private showAlert(message) {
+    this.alertCtrl.
+      create({ header: 'Authentication failed', message: message, buttons: ['Ok'] }).then(el => {
+        el.present();
+      })
   }
 }
